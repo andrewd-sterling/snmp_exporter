@@ -167,6 +167,7 @@ type Metric struct {
 	Indexes        []*Index                   `yaml:"indexes,omitempty"`
 	Lookups        []*Lookup                  `yaml:"lookups,omitempty"`
 	RegexpExtracts map[string][]RegexpExtract `yaml:"regex_extracts,omitempty"`
+	Encoding       string                     `yaml:"encoding",omitempty`
 }
 
 func (c *Metric) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -200,6 +201,7 @@ type Lookup struct {
 	Labelname string   `yaml:"labelname"`
 	Oid       string   `yaml:"oid"`
 	Type      string   `yaml:"type"`
+	Encoding  string   `yaml:"encoding,omitempty"`
 
 	XXX map[string]interface{} `yaml:",inline"`
 }

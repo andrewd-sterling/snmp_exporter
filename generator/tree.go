@@ -165,7 +165,7 @@ func generateConfigModule(cfg *ModuleConfig, node *Node, nameToNode map[string]*
 				Name:    sanitizeLabelName(n.Label),
 				Oid:     n.Oid,
 				Type:    t,
-				Help:    n.Description + " - " + n.Oid,
+				Help:    n.Description + " - " + n.Oid + " " + t,
 				Indexes: []*config.Index{},
 				Lookups: []*config.Lookup{},
 			}
@@ -220,6 +220,7 @@ func generateConfigModule(cfg *ModuleConfig, node *Node, nameToNode map[string]*
 		for _, metric := range out.Metrics {
 			if name == metric.Name || name == metric.Oid {
 				metric.RegexpExtracts = params.RegexpExtracts
+        metric.Encoding = params.Encoding
 			}
 		}
 	}

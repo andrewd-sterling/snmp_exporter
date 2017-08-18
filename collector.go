@@ -200,14 +200,15 @@ func pduToSamples(indexOids []int, pdu *gosnmp.SnmpPDU, metric *config.Metric, o
 		// It's some form of string.
 		t = prometheus.GaugeValue
 		value = 1.0
+		pdu_value := pduValueAsString(pdu, metric.Type, metric.Encoding)
 		if len(metric.RegexpExtracts) > 0 {
-			return applyRegexExtracts(metric, pduValueAsString(pdu, metric.Type), labelnames, labelvalues)
+			return applyRegexExtracts(metric, pdu_value, labelnames, labelvalues)
 		}
 		// For strings we put the value as a label with the same name as the metric.
 		// If the name is already an index, we do not need to set it again.
 		if _, ok := labels[metric.Name]; !ok {
 			labelnames = append(labelnames, metric.Name)
-			labelvalues = append(labelvalues, pduValueAsString(pdu, metric.Type))
+			labelvalues = append(labelvalues, pdu_value)
 		}
 	}
 
@@ -229,6 +230,9 @@ func applyRegexExtracts(metric *config.Metric, pduValue string, labelnames, labe
 			if err != nil {
 				log.Debugf("Error parsing float64 from value: %v for metric: %v", res, metric.Name)
 				continue
+			}
+			if name == "_" {
+			  name = ""
 			}
 			newMetric := prometheus.MustNewConstMetric(prometheus.NewDesc(metric.Name+name, metric.Help+" (regex extracted)", labelnames, nil),
 				prometheus.GaugeValue, v, labelvalues...)
@@ -255,7 +259,7 @@ func splitOid(oid []int, count int) ([]int, []int) {
 }
 
 // This mirrors decodeValue in gosnmp's helper.go.
-func pduValueAsString(pdu *gosnmp.SnmpPDU, typ string) string {
+func pduValueAsString(pdu *gosnmp.SnmpPDU, typ string, encoding string) string {
 	switch pdu.Value.(type) {
 	case int:
 		return strconv.Itoa(pdu.Value.(int))
@@ -283,7 +287,7 @@ func pduValueAsString(pdu *gosnmp.SnmpPDU, typ string) string {
 			// Prepend the length, as it is explicit in an index.
 			parts = append([]int{len(pdu.Value.([]byte))}, parts...)
 		}
-		str, _, _ := indexOidsAsString(parts, typ)
+		str, _, _ := indexOidsAsString(parts, typ, encoding)
 		return str
 	case nil:
 		return ""
@@ -298,7 +302,7 @@ func pduValueAsString(pdu *gosnmp.SnmpPDU, typ string) string {
 // Convert oids to a string index value.
 //
 // Returns the string, the oids that were used and the oids left over.
-func indexOidsAsString(indexOids []int, typ string) (string, []int, []int) {
+func indexOidsAsString(indexOids []int, typ string, encoding string) (string, []int, []int) {
 	switch typ {
 	case "Integer32", "Integer", "gauge", "counter":
 		// Extract the oid for this index, and keep the remainder for the next index.
@@ -323,7 +327,11 @@ func indexOidsAsString(indexOids []int, typ string) (string, []int, []int) {
 		if len(parts) == 0 {
 			return "", subOid, indexOids
 		} else {
-			return fmt.Sprintf("0x%X", string(parts)), subOid, indexOids
+		  if encoding == "utf8" {
+	      return string(parts), subOid, indexOids
+  	  } else {
+  			return fmt.Sprintf("0x%X", string(parts)), subOid, indexOids
+			}
 		}
 	case "DisplayString":
 		subOid, indexOids := splitOid(indexOids, 1)
@@ -398,7 +406,7 @@ func indexesToLabels(indexOids []int, metric *config.Metric, oidToPdu map[string
 
 	// Covert indexes to useful strings.
 	for _, index := range metric.Indexes {
-		str, subOid, remainingOids := indexOidsAsString(indexOids, index.Type)
+		str, subOid, remainingOids := indexOidsAsString(indexOids, index.Type, "utf8")
 		// The labelvalue is the text form of the index oids.
 		labels[index.Labelname] = str
 		// Save its oid in case we need it for lookups.
@@ -416,7 +424,7 @@ func indexesToLabels(indexOids []int, metric *config.Metric, oidToPdu map[string
 			}
 		}
 		if pdu, ok := oidToPdu[oid]; ok {
-			labels[lookup.Labelname] = pduValueAsString(&pdu, lookup.Type)
+			labels[lookup.Labelname] = pduValueAsString(&pdu, lookup.Type, lookup.Encoding)
 		} else {
 			labels[lookup.Labelname] = ""
 		}
